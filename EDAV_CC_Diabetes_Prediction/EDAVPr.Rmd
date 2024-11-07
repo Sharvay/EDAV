@@ -1,0 +1,190 @@
+---
+title: "End-to-End Machine Learning Project Development: From Data Exploration to Web App Development using R"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+# Loading packages
+library(tidyverse)
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+```
+
+```{r}
+# Loading the data
+diabetes_data <- read.csv("C:\\Sharvay\\My_Files\\Notes\\Columbia_MSDS\\EDAV\\Assignments\\Community Contribution/diabetes_prediction_dataset.csv")
+
+# Quick data exploration
+str(diabetes_data)
+```
+
+```{r}
+head(diabetes_data)
+```
+
+```{r}
+summary(diabetes_data)
+```
+
+```{r}
+# Convert categorical variables to factors
+# When training machine learning models, categorical data needs to be treated differently from numeric data. Converting to factors helps R understand these columns should be handled as categories rather than continuous values.
+diabetes_data$gender <- as.factor(diabetes_data$gender)
+diabetes_data$hypertension <- as.factor(diabetes_data$hypertension)
+diabetes_data$heart_disease <- as.factor(diabetes_data$heart_disease)
+diabetes_data$smoking_history <- as.factor(diabetes_data$smoking_history)
+
+# Target variable
+diabetes_data$diabetes <- as.factor(diabetes_data$diabetes) 
+
+```
+
+```{r}
+# We will Handle missing values if any
+# apply is a function in R that applies a specified function to each element of a list or vector and returns the results in a simplified form, usually a vector or matrix. It's useful for operations on lists or columns of a data frame, like calculating the mean, sum, or checking for missing values across multiple columns. For example, sapply(data, mean) calculates the mean of each column in data and returns a vector of means.
+sapply(diabetes_data, function(x) sum(is.na(x)))
+```
+
+
+```{r}
+# Splitting the dataset into training and testing sets
+set.seed(123)
+train_row_indices <- createDataPartition(diabetes_data$diabetes, p = 0.8, list = FALSE)
+
+all_indices <- 1:nrow(diabetes_data)
+test_row_indices <- setdiff(all_indices, train_row_indices)
+
+train_data <- diabetes_data[train_row_indices, ]
+test_data <- diabetes_data[test_row_indices, ]
+nrow(train_data)
+nrow(test_data)
+```
+```{r}
+# Age distribution by Diabetes Status
+ggplot(diabetes_data, aes(x = age, fill = diabetes)) +
+  geom_histogram(bins = 30, alpha = 0.7, position = "identity") +
+  labs(title = "Age Distribution by Diabetes Status", x = "Age", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# BMI distribution
+ggplot(diabetes_data, aes(x = bmi)) +
+  geom_histogram(bins = 30, fill = "orange", color = "black") +
+  labs(title = "BMI Distribution", x = "BMI", y = "Count") +
+  theme_minimal()
+```
+
+
+```{r}
+# Box Plot of Age vs. Diabetes Status by Gender
+ggplot(diabetes_data, aes(x = diabetes, y = age, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Age Distribution by Diabetes Status and Gender", x = "Diabetes Status", y = "Age") +
+  theme_minimal()
+```
+
+
+```{r}
+#Building a correlation matrix
+
+numeric_data <- diabetes_data[sapply(diabetes_data, is.numeric)]
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Melt the correlation matrix for plotting
+cor_melted <- melt(cor_matrix)
+
+# Plot the correlation heatmap
+ggplot(cor_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "steelblue", mid = "lightgrey", high = "darkred", midpoint = 0)+
+  labs(title = "Correlation Heatmap of Numeric Variables", x = "Feature List", y = "Feature List") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+# 
+# library(randomForest)
+# 
+# Train a Random Forest model with verbose output
+# 
+# set.seed(123)
+# model <- train(
+#   diabetes ~ .,
+#   data = train_data,
+#   method = "rf",
+#   trControl = trainControl(method = "cv", number = 3, verboseIter = TRUE)  # Enable verbose output
+# )
+# 
+# 
+# Print the model results
+# print(model)
+# 
+
+```
+
+```{r}
+# saveRDS(model, "diabetes_model.rds")
+```
+
+```{r}
+model <- readRDS("diabetes_model.rds")
+```
+
+```{r}
+print(model)
+```
+
+
+```{r}
+# Make predictions on the test set
+test_data_predictions <- predict(model, newdata = test_data)
+
+# Confusion matrix
+confusionMatrix(test_data_predictions, test_data$diabetes)
+
+```
+```{r}
+cm <- confusionMatrix(test_data_predictions, test_data$diabetes)
+
+cm_data <- as.data.frame(cm$table)
+
+cm_data$Reference <- factor(cm_data$Reference, levels = rev(levels(cm_data$Reference)))
+
+ggplot(cm_data, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Confusion Matrix", x = "Predicted Label", y = "Actual Label") +
+  theme_minimal()
+ 
+
+```
+
+
+Interpretation:
+
+1. **True Negatives (Top-Left: 18,300)**: The model correctly identified 18,300 instances where the actual label is negative (0), and the predicted label is also negative. This high count of true negatives indicates that the model performs well in identifying the majority class, which seems to be the negative class.
+
+2. **False Negatives (Bottom-Left: 554)**: These are cases where the actual label is positive (1), but the model predicted it as negative (0). There are 554 false negatives, which suggests that the model occasionally misses positive cases.
+
+3. **False Positives (Top-Right: 0)**: There are no cases where the actual label is negative (0), but the model predicted it as positive (1). This indicates that the model has a strong bias towards predicting the negative class and rarely, if ever, incorrectly labels a negative instance as positive.
+
+4. **True Positives (Bottom-Right: 1,146)**: These are instances where the actual label is positive (1), and the model correctly predicted it as positive. The model correctly identified 1,146 positive cases.
+
+### Observations:
+- **Class Imbalance**: The high number of true negatives (18,300) compared to true positives (1,146) suggests that there may be an imbalance in the data, with the negative class (0) being the majority. This could cause the model to be more conservative in predicting the positive class.
+
+- **Good Performance on Negative Class**: The model has no false positives, indicating that it is conservative in predicting positives and is highly accurate when predicting negatives.
+
+- **Moderate Performance on Positive Class**: While the model correctly identifies a portion of positive cases (1,146 true positives), it still misses some (554 false negatives). This means that while the model is relatively cautious, there is room for improvement in detecting positives.
+
+- **Overall Accuracy**: The model appears to have high accuracy for the majority (negative) class, but its performance on the minority (positive) class could potentially be improved. Techniques such as re-sampling, adjusting class weights, or tuning the decision threshold could help improve positive class detection.
+
